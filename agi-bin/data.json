@@ -1,0 +1,5 @@
+{
+  "Chile/Mobile": ["chilephone", "mensaje", "tono", "llamada"],
+  "Mexico/Mobile": ["mexicophone", "mensaje", "tono", "llamada"],
+  "Ukraine/Kyivstar": ["київстар", "абонент", "поза", "зоною", "досяжності"]
+}
