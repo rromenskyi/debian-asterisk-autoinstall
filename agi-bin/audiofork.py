@@ -150,8 +150,8 @@ async def handle_audio(websocket, path):
             print(text_array)
             if count_matching_arrays(keywords, text_array, 2):
                 if phone.startswith('+'):
-                    phone  = phone_number.lstrip('+')
-                    find_and_hangup(phone_number)
+                    phone  = phone.lstrip('+')
+                    find_and_hangup(phone)
                     print('Answering machine detected')
 
     except websockets.exceptions.ConnectionClosedError:
