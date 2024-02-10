@@ -9,7 +9,7 @@ apt-get -y install mc fail2ban docker docker.io libedit-dev git curl wget libnew
 ###
 # system config
 ###
-#echo "root            soft    nofile          16384\nroot            hard    nofile          65535\nasterisk        soft    nofile          16384\nasterisk        hard    nofile          65535" | sudo tee -a /etc/security/limits.conf
+echo "root            soft    nofile          16384\nroot            hard    nofile          65535\nasterisk        soft    nofile          16384\nasterisk        hard    nofile          65535" | sudo tee -a /etc/security/limits.conf
 
 ###
 # fail2ban install/conf
