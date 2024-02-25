@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  asterisk:
+    image: roman220/asterisk-certified:18.9-cert8-rc1
+    container_name: asterisk-container
+#    command: tail -f /dev/null
+    networks:
+      - asterisk-bridge
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+    volumes:
+      - ./asterisk/logs:/var/log/asterisk
+      - ./asterisk/etc:/etc/asterisk
+    depends_on:
+      - mariadb
+
+  mariadb:
+    image: mariadb
+    container_name: mariadb-container
+    networks:
+      - asterisk-bridge
+    environment:
+      MYSQL_ROOT_PASSWORD: my-secret-pw
+#      MYSQL_DATABASE: asteriskcdrdb
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mariadb/data:/var/lib/mysql
+      - ./html-config/cdr.sql:/docker-entrypoint-initdb.d/init.sql
+
+  php-fpm:
+    image: roman220/php-fpm
+    container_name: php-fpm-container
+#    command: tail -f /dev/null
+    networks:
+      - asterisk-bridge
+    ports:
+      - "8080:80/tcp"
+      - "8443:443/tcp"
+    volumes:
+      - ./html:/var/www/html
+
+
+networks:
+  asterisk-bridge:
+    driver: bridge
