@@ -3,14 +3,14 @@
 # It is expected that the configuration should be generated separately, as from https://github.com/CyCoreSystems/asterisk-config.
 #
 
-FROM debian:buster as builder
+FROM debian:bookworm as builder
 MAINTAINER Roman Romenskyi "roman220220@gmail.com"
 
 ENV ASTERISK_VER 18.9-cert8-rc1
 
 # Install Asterisk
 RUN apt-get update && \
-   apt-get install -y autoconf build-essential libjansson-dev libxml2-dev libncurses5-dev libspeex-dev libcurl4-openssl-dev libedit-dev libspeexdsp-dev libgsm1-dev uuid-dev sqlite3 libsqlite3-dev libspandsp-dev pkg-config python-dev libssl-dev openssl libopus-dev liburiparser-dev xmlstarlet curl wget && \
+   apt-get install -y libedit-dev git curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev build-essential libjansson-dev libxml2-dev uuid-dev autoconf libpcap-dev libxml2-utils unixodbc-dev odbc-mariadb libspeex-dev libcurl4-openssl-dev libspeexdsp-dev libgsm1-dev sqlite3 libspandsp-dev pkg-config python3-dev openssl libopus-dev liburiparser-dev libmariadb-dev xmlstarlet && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -18,14 +18,6 @@ WORKDIR /tmp
 RUN curl -o /tmp/asterisk.tar.gz https://downloads.asterisk.org/pub/telephony/certified-asterisk/asterisk-certified-${ASTERISK_VER}.tar.gz && \
    tar xf /tmp/asterisk.tar.gz && \
    cd /tmp/asterisk-certified-${ASTERISK_VER}
-
-RUN curl -L -o /tmp/audiosocket.tar.gz https://github.com/CyCoreSystems/audiosocket/archive/master.tar.gz &&\
-   cd /tmp/asterisk-certified-${ASTERISK_VER} &&\
-   tar xf /tmp/audiosocket.tar.gz &&\
-   cp audiosocket-master/asterisk/apps/* apps/ &&\
-   cp audiosocket-master/asterisk/channels/* channels/ &&\
-   cp -R audiosocket-master/asterisk/include/* include/ &&\
-   cp audiosocket-master/asterisk/res/* res/
 
 RUN cd /tmp/asterisk-certified-${ASTERISK_VER} &&\
    ./configure --with-pjproject-bundled --with-jansson-bundled --with-spandsp --with-opus && \
@@ -35,7 +27,7 @@ RUN cd /tmp/asterisk-certified-${ASTERISK_VER} &&\
    make install && \
    rm -Rf /tmp/*
 
-FROM debian:buster
+FROM debian:bookworm
 COPY --from=builder /usr/sbin/asterisk /usr/sbin/
 COPY --from=builder /usr/sbin/safe_asterisk /usr/sbin/
 COPY --from=builder /usr/lib/libasterisk* /usr/lib/
@@ -45,7 +37,7 @@ COPY --from=builder /var/spool/asterisk/ /var/spool/asterisk
 
 # Add required runtime libs
 RUN apt-get update && \
-   apt-get install -y gnupg libjansson4 xml2 libncurses5 libspeex1 libcurl4-openssl-dev libedit2 libspeexdsp1 libgsm1 uuid libsqlite3-0 libspandsp2 libssl1.1 libopus0 liburiparser1 xmlstarlet curl wget && \
+   apt-get install -y gnupg libjansson4 xml2 libncurses5 libspeex1 libcurl4-openssl-dev libedit2 libspeexdsp1 libgsm1 uuid libsqlite3-0 libspandsp2 libssl3 libopus0 liburiparser1 xmlstarlet odbc-mariadb libodbc2 flac curl wget && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -61,7 +53,9 @@ ADD entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 5060/udp 5060/tcp
-VOLUME /var/lib/asterisk/sounds /var/lib/asterisk/keys /var/lib/asterisk/phoneprov /var/spool/asterisk /var/log/asterisk
+VOLUME /var/lib/asterisk/sounds /var/lib/asterisk/keys /var/lib/asterisk/phoneprov /var/spool/asterisk /var/log/asterisk /etc/asterisk
+
+COPY odbc.ini /etc/odbc.ini
 
 WORKDIR /
 ENTRYPOINT ["/entrypoint.sh"]
