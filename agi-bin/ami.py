@@ -11,7 +11,7 @@ def find_and_hangup(call_number):
     try:
         # Подключаемся к серверу Asterisk AMI
         manager.connect('176.74.220.11')
-        manager.login('roman220ami', 'UPheenaidienai0opho4noon')
+        manager.login('roman220ami', 'tiemo7eorievohBohk5ohjue')
 
         # Получаем список активных каналов
         response = manager.send_action({'Action': 'Command', 'Command': 'core show channels concise'})
@@ -20,7 +20,7 @@ def find_and_hangup(call_number):
         for line in response.data.splitlines():
             # Разделяем строку по пробелам
             parts = line.split('!')
-#            print(line)
+            print(line)
             if len(parts) >= 10:
                 # Получаем номер телефона из строки
                 channel = parts[0]
