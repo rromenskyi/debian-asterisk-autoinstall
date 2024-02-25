@@ -1,5 +1,5 @@
 FROM debian:buster-slim
-MAINTAINER Seán C McCord "scm@cycoresys.com"
+MAINTAINER Roman Romenskyi "roman220220@gmail.com"
 
 RUN apt-get update && \
     apt-get install -y curl procps gnupg2 sngrep && \
