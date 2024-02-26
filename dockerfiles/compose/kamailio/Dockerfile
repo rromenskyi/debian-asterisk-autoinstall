@@ -1,4 +1,4 @@
-FROM debian:buster-slim
+FROM debian:bookworm
 MAINTAINER Roman Romenskyi "roman220220@gmail.com"
 
 RUN apt-get update && \
@@ -6,10 +6,10 @@ RUN apt-get update && \
     apt-get clean
 
 # Install kamailio
-RUN curl -qO http://deb.kamailio.org/kamailiodebkey.gpg && \
-    apt-key add kamailiodebkey.gpg && \
-    echo "deb http://deb.kamailio.org/kamailio52 stretch main\ndeb-src http://deb.kamailio.org/kamailio52 stretch main" > /etc/apt/sources.list.d/kamailio.list
-RUN apt-get update &&  apt-get install -y kamailio kamailio-json-modules kamailio-utils-modules kamailio-extra-modules kamailio-nth && apt-get clean
+#RUN curl -qO http://deb.kamailio.org/kamailiodebkey.gpg && \
+#    apt-key add kamailiodebkey.gpg && \
+#    echo "deb http://deb.kamailio.org/kamailio52 stretch main\ndeb-src http://deb.kamailio.org/kamailio52 stretch main" > /etc/apt/sources.list.d/kamailio.list
+RUN apt-get update &&  apt-get install -y kamailio kamailio-json-modules kamailio-utils-modules kamailio-extra-modules tail && apt-get clean
 
 # Download netdiscover
 RUN curl -qL -o /usr/bin/netdiscover https://github.com/CyCoreSystems/netdiscover/releases/download/v1.2.5/netdiscover.linux.amd64
