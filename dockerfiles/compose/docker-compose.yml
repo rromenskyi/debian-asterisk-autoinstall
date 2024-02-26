@@ -11,10 +11,15 @@ services:
       - "5060:5060/udp"
       - "5060:5060/tcp"
     volumes:
-      - ./asterisk/logs:/var/log/asterisk
-      - ./asterisk/etc:/etc/asterisk
+      - ./runtime/asterisk/logs:/var/log/asterisk
+      - ./runtime/asterisk/etc:/etc/asterisk
     depends_on:
       - mariadb
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
 
   mariadb:
     image: mariadb
@@ -27,8 +32,8 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./mariadb/data:/var/lib/mysql
-      - ./html-config/cdr.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./runtime/mariadb/data:/var/lib/mysql
+      - ./runtime/html-config/cdr.sql:/docker-entrypoint-initdb.d/init.sql
 
   php-fpm:
     image: roman220/php-fpm
@@ -40,8 +45,21 @@ services:
       - "8080:80/tcp"
       - "8443:443/tcp"
     volumes:
-      - ./html:/var/www/html
+      - ./runtime/html:/var/www/html
 
+  rtpengine:
+    build: rtpengine/
+    container_name: rtpengine-container
+    networks:
+      - asterisk-bridge
+  
+  kamailio:
+    build: kamailio/
+    command: tail -f /dev/null
+    container_name: kamailio-container
+    networks:
+      - asterisk-bridge
+  
 
 networks:
   asterisk-bridge:
