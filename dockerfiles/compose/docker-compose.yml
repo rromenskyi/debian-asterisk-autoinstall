@@ -3,13 +3,14 @@ version: '3.8'
 services:
   asterisk:
     image: roman220/asterisk-certified:18.9-cert8-rc1
+    hostname: asterisk
     container_name: asterisk-container
 #    command: tail -f /dev/null
-    networks:
-      - asterisk-bridge
-    ports:
-      - "5060:5060/udp"
-      - "5060:5060/tcp"
+    network_mode: host
+    restart: unless-stopped
+#    ports:
+#      - "5060:5060/udp"
+#      - "5060:5060/tcp"
     volumes:
       - ./runtime/asterisk/logs:/var/log/asterisk
       - ./runtime/asterisk/etc:/etc/asterisk
@@ -23,44 +24,42 @@ services:
 
   mariadb:
     image: mariadb
+    hostname: mariadb
     container_name: mariadb-container
-    networks:
-      - asterisk-bridge
+    network_mode: host
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: my-secret-pw
 #      MYSQL_DATABASE: asteriskcdrdb
-    ports:
-      - "3306:3306"
+#    ports:
+#      - "3306:3306"
     volumes:
       - ./runtime/mariadb/data:/var/lib/mysql
       - ./runtime/html-config/cdr.sql:/docker-entrypoint-initdb.d/init.sql
 
   php-fpm:
     image: roman220/php-fpm
+    hostname: nginx
     container_name: php-fpm-container
 #    command: tail -f /dev/null
-    networks:
-      - asterisk-bridge
-    ports:
-      - "8080:80/tcp"
-      - "8443:443/tcp"
+    network_mode: host
+    restart: unless-stopped
+#    ports:
+#      - "8080:80/tcp"
+#      - "8443:443/tcp"
     volumes:
       - ./runtime/html:/var/www/html
 
   rtpengine:
     build: rtpengine/
     container_name: rtpengine-container
-    networks:
-      - asterisk-bridge
-  
+    network_mode: host
+    restart: unless-stopped
+
   kamailio:
     build: kamailio/
     command: tail -f /dev/null
     container_name: kamailio-container
-    networks:
-      - asterisk-bridge
-  
+    network_mode: host
+    restart: unless-stopped
 
-networks:
-  asterisk-bridge:
-    driver: bridge
