@@ -45,7 +45,7 @@ resource "aws_security_group_rule" "allow_egress" {
 resource "aws_security_group" "web_server_with_ssh" {
   name        = "testproj_ec2_sg"
   description = "Allow SSH inbound traffic"
-  vpc_id = aws_vpc.my_vpc.id
+  vpc_id      = aws_vpc.my_vpc.id
 }
 
 resource "aws_vpc" "my_vpc" {
@@ -69,13 +69,13 @@ resource "aws_internet_gateway" "my_igw" {
 }
 
 resource "aws_instance" "nginx_instance" {
-  ami           = "ami-02fe204d17e0189fb"
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.my_subnet.id
+  ami                         = "ami-02fe204d17e0189fb"
+  instance_type               = "t2.micro"
+  subnet_id                   = aws_subnet.my_subnet.id
   associate_public_ip_address = true
-  key_name = "aws" 
-  vpc_security_group_ids = [aws_security_group.web_server_with_ssh.id]
-  user_data = <<-EOF
+  key_name                    = "aws"
+  vpc_security_group_ids      = [aws_security_group.web_server_with_ssh.id]
+  user_data                   = <<-EOF
               #!/bin/bash
               sudo yum update -y
               sudo yum install docker -y
@@ -86,13 +86,13 @@ resource "aws_instance" "nginx_instance" {
 }
 
 resource "aws_instance" "apache2_instance" {
-  ami           = "ami-02fe204d17e0189fb"
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.my_subnet.id
+  ami                         = "ami-02fe204d17e0189fb"
+  instance_type               = "t2.micro"
+  subnet_id                   = aws_subnet.my_subnet.id
   associate_public_ip_address = true
-  key_name = "aws"
-  vpc_security_group_ids = [aws_security_group.web_server_with_ssh.id]
-  user_data = <<-EOF
+  key_name                    = "aws"
+  vpc_security_group_ids      = [aws_security_group.web_server_with_ssh.id]
+  user_data                   = <<-EOF
               #!/bin/bash
               sudo yum update -y
               sudo yum install docker -y
