@@ -1,51 +1,62 @@
 #!/bin/bash
 
-sudo apt-get -y install tar gzip
+set -euo pipefail
 
-tee /etc/asterisk-backup.conf << END
-BACKUP_PATH=/opt/backup
-END
+BACKUP_PATH="${BACKUP_PATH:-/opt/backup}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 
-tee /usr/local/bin/backup_script.sh << END
+log() {
+  printf '%s\n' "$*"
+}
+
+require_root() {
+  if [[ ${EUID} -ne 0 ]]; then
+    log "run this script as root or via sudo"
+    exit 1
+  fi
+}
+
+write_config() {
+  cat > /etc/asterisk-backup.conf <<EOF
+BACKUP_PATH="${BACKUP_PATH}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS}"
+EOF
+}
+
+write_backup_script() {
+  cat > /usr/local/bin/backup_script.sh <<'EOF'
 #!/bin/bash
 
-# Загрузка конфигурации
+set -euo pipefail
+
 source /etc/asterisk-backup.conf
 
-# Создание папки для дампов, если она еще не существует
-mkdir -p \$BACKUP_PATH
+mkdir -p "${BACKUP_PATH}"
 
-# Формирование имени файла: путь/дата-время
-BACKUP_FILE="\$BACKUP_PATH/\$(date +%F-%H-%M-%S)"
+timestamp="$(date +%F-%H-%M-%S)"
+backup_prefix="${BACKUP_PATH}/${timestamp}"
 
-# Запуск tar
-tar czf \$BACKUP_FILE-astconf.tar.gz -P /etc/asterisk
-tar czf \$BACKUP_FILE-astvar.tar.gz -P /var/lib/asterisk
-/usr/bin/mysqldump --lock-tables=false asteriskcdrdb | gzip -9 > \$BACKUP_FILE-mysqldump.gz
+tar czf "${backup_prefix}-astconf.tar.gz" -P /etc/asterisk
+tar czf "${backup_prefix}-astvar.tar.gz" -P /var/lib/asterisk
+/usr/bin/mysqldump --lock-tables=false asteriskcdrdb | gzip -9 > "${backup_prefix}-mysqldump.gz"
 
-# Ротация: Удаление старых дампов, например, старше 14 дней
-find \$BACKUP_PATH -type f -name '*.gz' -mtime +14 -delete
+find "${BACKUP_PATH}" -type f -name '*.gz' -mtime +"${BACKUP_RETENTION_DAYS}" -delete
+EOF
 
-END
+  chmod 755 /usr/local/bin/backup_script.sh
+}
 
-sudo chmod 755 /usr/local/bin/backup_script.sh
-
-
-
-tee /etc/systemd/system/backup.service << END
+write_systemd_units() {
+  cat > /etc/systemd/system/backup.service <<'EOF'
 [Unit]
 Description=Daily backup service
 
 [Service]
-#Type=oneshot
-Type=simple
+Type=oneshot
 ExecStart=/usr/local/bin/backup_script.sh
+EOF
 
-[Install]
-WantedBy=multi-user.target
-END
-
-tee /etc/systemd/system/backup.timer << END
+  cat > /etc/systemd/system/backup.timer <<'EOF'
 [Unit]
 Description=Runs backup daily
 
@@ -55,8 +66,18 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target
-END
+EOF
+}
 
-sudo systemctl daemon-reload
-sudo systemctl enable backup.timer
-sudo systemctl start backup.timer
+main() {
+  require_root
+  apt-get -y install tar gzip
+  write_config
+  write_backup_script
+  write_systemd_units
+  systemctl daemon-reload
+  systemctl enable backup.timer
+  systemctl start backup.timer
+}
+
+main "$@"
