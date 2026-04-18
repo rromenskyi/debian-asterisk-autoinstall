@@ -1,6 +1,8 @@
 #!/bin/bash
 #asterisk 18-cert postinstall script on debian 12
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
 if [ -f /usr/src/.asterisk-mysql-pass ]; then
  echo "already done"
  exit 1
@@ -30,7 +32,7 @@ echo "GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asteriskcdr'@'localhost';" | m
 echo "$ASTPASSCDR" > /usr/src/.asteriskcdr-mysql-pass
 chmod 600 /usr/src/.asteriskcdr-mysql-pass
 
-mysql -uasteriskcdr -p$ASTPASSCDR asteriskcdrdb -e "source cdr.sql;"
+mysql -uasteriskcdr -p"$ASTPASSCDR" asteriskcdrdb < "${SCRIPT_DIR}/cdr.sql"
 
 tee -a /etc/odbc.ini << END
 [asterisk-cdr-connector]
@@ -146,7 +148,6 @@ cd /usr/lib/asterisk/modules
 wget -O codec_g729.so http://asterisk.hosting.lv/bin/codec_g729-ast180-gcc4-glibc-x86_64-core2-sse4.so
 wget -O codec_g723.so http://asterisk.hosting.lv/bin/codec_g723-ast180-gcc4-glibc-x86_64-core2-sse4.so
 chmod 755 codec_g7*.so
-
 
 
 
