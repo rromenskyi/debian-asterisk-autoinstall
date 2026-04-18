@@ -1,10 +1,14 @@
 #!/bin/sh
 #asterisk 18-cert autoinstall script on debian 12
 
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+ASTERISK_TIMEZONE="${ASTERISK_TIMEZONE:-UTC}"
+
 ###
 # install packages/deps
 ###
-apt-get -y install mc fail2ban docker docker.io libedit-dev git curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev build-essential libjansson-dev libxml2-dev uuid-dev autoconf libpcap-dev libxml2-utils odbc-mariadb mariadb-server pwgen libmariadb-dev unixodbc-dev
+apt-get update
+apt-get -y install mc fail2ban docker.io libedit-dev git curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev build-essential libjansson-dev libxml2-dev uuid-dev autoconf libpcap-dev libxml2-utils odbc-mariadb mariadb-server pwgen libmariadb-dev unixodbc-dev
 
 ###
 # system config
@@ -35,7 +39,7 @@ systemctl restart fail2ban
 ###
 # tz conf
 ###
-timedatectl set-timezone UTC
+timedatectl set-timezone "${ASTERISK_TIMEZONE}"
 ###
 # asterisk cert configuration
 ###

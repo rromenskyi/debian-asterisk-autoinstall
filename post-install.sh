@@ -12,6 +12,9 @@ systemctl restart mariadb
 
 mkdir -p /etc/asterisk/sip_config
 mkdir -p /etc/asterisk/dialplan
+mkdir -p /var/run/asterisk
+mkdir -p /var/log/asterisk
+mkdir -p /usr/lib/asterisk/modules
 
 ASTPASS=`pwgen -s 14 1`
 ASTPASSCDR=`pwgen -s 14 1`
@@ -145,9 +148,11 @@ END
 
 
 cd /usr/lib/asterisk/modules
-wget -O codec_g729.so http://asterisk.hosting.lv/bin/codec_g729-ast180-gcc4-glibc-x86_64-core2-sse4.so
-wget -O codec_g723.so http://asterisk.hosting.lv/bin/codec_g723-ast180-gcc4-glibc-x86_64-core2-sse4.so
+if wget -O codec_g729.so http://asterisk.hosting.lv/bin/codec_g729-ast180-gcc4-glibc-x86_64-core2-sse4.so && \
+   wget -O codec_g723.so http://asterisk.hosting.lv/bin/codec_g723-ast180-gcc4-glibc-x86_64-core2-sse4.so; then
 chmod 755 codec_g7*.so
-
+else
+echo "optional codec download failed; continuing without third-party codecs"
+fi
 
 
