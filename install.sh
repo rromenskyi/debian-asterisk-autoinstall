@@ -1,25 +1,78 @@
 #!/bin/sh
-#asterisk 18-cert autoinstall script on debian 12
+# Install Asterisk Certified 18 and supporting tooling on Debian 12.
+
+set -eu
 
 export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+
 ASTERISK_TIMEZONE="${ASTERISK_TIMEZONE:-UTC}"
+BUILD_JOBS="${BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 
-###
-# install packages/deps
-###
-apt-get update
-apt-get -y install mc fail2ban docker.io libedit-dev git curl wget libnewt-dev libssl-dev libncurses5-dev subversion libsqlite3-dev build-essential libjansson-dev libxml2-dev uuid-dev autoconf libpcap-dev libxml2-utils odbc-mariadb mariadb-server pwgen libmariadb-dev unixodbc-dev
+SRC_DIR="/usr/src"
+ASTERISK_ARCHIVE_URL="https://downloads.asterisk.org/pub/telephony/certified-asterisk/asterisk-certified-current.tar.gz"
+ASTERISK_MD5_URL="https://downloads.asterisk.org/pub/telephony/certified-asterisk/asterisk-certified-current.md5"
+ASTERISK_ARCHIVE="${SRC_DIR}/asterisk-certified-current.tar.gz"
+ASTERISK_MD5_FILE="${SRC_DIR}/asterisk-certified-current.md5"
+ASTERISK_SOURCE_LINK="${SRC_DIR}/asterisk-certified"
+PJPROJECT_DIR="${SRC_DIR}/pjproject"
+SNGREP_DIR="${SRC_DIR}/sngrep"
 
-###
-# system config
-###
-echo "root            soft    nofile          16384\nroot            hard    nofile          65535\nasterisk        soft    nofile          16384\nasterisk        hard    nofile          65535" | sudo tee -a /etc/security/limits.conf
+log() {
+  printf '%s\n' "$*"
+}
 
-###
-# fail2ban install/conf
-###
-mkdir -p /var/run/fail2ban
-sudo tee /etc/fail2ban/jail.d/defaults-debian.conf << END
+require_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    log "run this script as root or via sudo"
+    exit 1
+  fi
+}
+
+install_packages() {
+  log "installing Debian packages"
+  apt-get update
+  apt-get -y install \
+    mc \
+    fail2ban \
+    docker.io \
+    libedit-dev \
+    git \
+    curl \
+    wget \
+    libnewt-dev \
+    libssl-dev \
+    libncurses5-dev \
+    subversion \
+    libsqlite3-dev \
+    build-essential \
+    libjansson-dev \
+    libxml2-dev \
+    uuid-dev \
+    autoconf \
+    libpcap-dev \
+    libxml2-utils \
+    odbc-mariadb \
+    mariadb-server \
+    pwgen \
+    libmariadb-dev \
+    unixodbc-dev
+}
+
+configure_limits() {
+  log "writing system limits for Asterisk"
+  mkdir -p /etc/security/limits.d
+  cat > /etc/security/limits.d/asterisk.conf <<'EOF'
+root            soft    nofile          16384
+root            hard    nofile          65535
+asterisk        soft    nofile          16384
+asterisk        hard    nofile          65535
+EOF
+}
+
+configure_fail2ban() {
+  log "configuring fail2ban"
+  mkdir -p /var/run/fail2ban
+  cat > /etc/fail2ban/jail.d/defaults-debian.conf <<'EOF'
 [sshd]
 backend=systemd
 enabled=true
@@ -32,102 +85,146 @@ filter   = asterisk
 logpath  = /var/log/asterisk/full
 maxretry = 5
 bantime  = 600
-findtime  = 600
+findtime = 600
+EOF
+  systemctl restart fail2ban
+}
 
-END
-systemctl restart fail2ban
-###
-# tz conf
-###
-timedatectl set-timezone "${ASTERISK_TIMEZONE}"
-###
-# asterisk cert configuration
-###
-mkdir -p /usr/src/
-cd /usr/src/
-wget -cq https://downloads.asterisk.org/pub/telephony/certified-asterisk/asterisk-certified-current.tar.gz
-wget -cq https://downloads.asterisk.org/pub/telephony/certified-asterisk/asterisk-certified-current.md5
-ln -sf `cat /usr/src/asterisk-certified-current.md5 | awk '{print $2}' | sed 's/\.tar\.gz$//'` asterisk-certified
-sed -i 's/asterisk-.*\.tar\.gz/asterisk-certified-current.tar.gz/' /usr/src/asterisk-certified-current.md5
+configure_timezone() {
+  log "setting timezone to ${ASTERISK_TIMEZONE}"
+  timedatectl set-timezone "${ASTERISK_TIMEZONE}"
+}
 
-if [ `md5sum --ignore-missing -c asterisk-certified-current.md5 | awk '{print $2}'` = "OK" ]; then
-echo "asterisk source downlad compete, extracting tgz"
-tar -zxf asterisk-certified-current.tar.gz
-rm -f asterisk-certified-current/menuselect.makeopts
+download_asterisk_source() {
+  log "downloading Asterisk Certified sources"
+  mkdir -p "${SRC_DIR}"
+  cd "${SRC_DIR}"
+  wget -cq -O "${ASTERISK_ARCHIVE}" "${ASTERISK_ARCHIVE_URL}"
+  wget -cq -O "${ASTERISK_MD5_FILE}" "${ASTERISK_MD5_URL}"
 
-###
-# building pjsip
-###
-if [ ! -d /usr/src/pjproject ]; then
-git clone https://github.com/asterisk/pjproject pjproject
-else
-cd pjproject
-git pull
-cd ..
-fi
-if [ ! -f /usr/local/lib/libpjmedia-audiodev.so.2 ]; then
-cd pjproject && ./configure --prefix=/usr/local --enable-shared --disable-sound --disable-resample --disable-video --disable-opencore-amr
-make dep && make -j8 && make install
-cd ..
-fi
+  asterisk_dir="$(awk '{print $2}' "${ASTERISK_MD5_FILE}" | sed 's/\.tar\.gz$//')"
+  ln -sfn "${asterisk_dir}" "${ASTERISK_SOURCE_LINK}"
+  sed -i 's/asterisk-.*\.tar\.gz/asterisk-certified-current.tar.gz/' "${ASTERISK_MD5_FILE}"
 
-###
-# building sngrep
-###
-if [ ! -d /usr/src/sngrep ]; then
-git clone https://github.com/irontec/sngrep sngrep
-else
-cd sngrep 
-git pull
-cd ..
-fi
-if [ ! -f /usr/local/bin/sngrep ]; then
-cd sngrep
-./bootstrap.sh && ./configure --prefix=/usr/local && make -j8 && make install
-cd ..
-fi
+  md5sum --ignore-missing -c "${ASTERISK_MD5_FILE}"
 
-if [ ! -f /usr/sbin/asterisk ]; then
-cd asterisk-certified
-contrib/scripts/get_mp3_source.sh
-#contrib/scripts/install_prereq install
-./configure && make -j8 && make samples && make config && make install
-echo asterisk installed!
-cd ..
-fi
+  if [ ! -d "${SRC_DIR}/${asterisk_dir}" ]; then
+    log "extracting Asterisk archive"
+    tar -zxf "${ASTERISK_ARCHIVE}"
+  fi
 
+  rm -f "${ASTERISK_SOURCE_LINK}/menuselect.makeopts"
+}
 
+ensure_git_checkout() {
+  target_dir="$1"
+  repo_url="$2"
 
-# Check if group exists
-if getent group "asterisk" &>/dev/null; then
-    echo "Group asterisk exists."
-else
-    addgroup asterisk
-    echo "Group asterisk does not exist."
-fi
+  if [ ! -d "${target_dir}/.git" ]; then
+    log "cloning $(basename "${target_dir}")"
+    git clone "${repo_url}" "${target_dir}"
+    return
+  fi
 
-# Check if user exists
-if id "asterisk" &>/dev/null; then
-    echo "User asterisk exists."
-else
-    echo "User asterisk does not exist."
-    useradd asterisk -d /var/lib/asterisk -g asterisk
-fi
+  log "updating $(basename "${target_dir}")"
+  (
+    cd "${target_dir}"
+    git pull --ff-only
+  )
+}
 
+build_pjproject() {
+  ensure_git_checkout "${PJPROJECT_DIR}" "https://github.com/asterisk/pjproject"
 
-#wget -c http://downloads.digium.com/pub/telephony/codec_opus/asterisk-18.0/x86-64/codec_opus-18.0_current-x86_64.tar.gz
-#tar -zxf codec_opus-18.0_current-x86_64.tar.gz
-#cd codec_opus-18.0_1.3.0-x86_64
-#mkdir -p /usr/lib/asterisk/modules
-#cp codec_opus.so /usr/lib/asterisk/modules
-#cp format_ogg_opus.so /usr/lib/asterisk/modules
-#mkdir -p /var/lib/asterisk/documentation/thirdparty
-#cp codec_opus_config-en_US.xml /var/lib/asterisk/documentation/thirdparty
-#cd ..
+  if [ -f /usr/local/lib/libpjmedia-audiodev.so.2 ]; then
+    log "pjproject already installed"
+    return
+  fi
 
-#wget -c http://downloads.digium.com/pub/telephony/codec_g729/asterisk-18.0/x86-64/codec_g729a-18.0_3.1.10-x86_64.tar.gz
+  log "building pjproject"
+  (
+    cd "${PJPROJECT_DIR}"
+    ./configure \
+      --prefix=/usr/local \
+      --enable-shared \
+      --disable-sound \
+      --disable-resample \
+      --disable-video \
+      --disable-opencore-amr
+    make dep
+    make -j"${BUILD_JOBS}"
+    make install
+  )
+}
 
+build_sngrep() {
+  ensure_git_checkout "${SNGREP_DIR}" "https://github.com/irontec/sngrep"
 
-else
-echo "asterisk md5 check error"
-fi
+  if [ -f /usr/local/bin/sngrep ]; then
+    log "sngrep already installed"
+    return
+  fi
+
+  log "building sngrep"
+  (
+    cd "${SNGREP_DIR}"
+    ./bootstrap.sh
+    ./configure --prefix=/usr/local
+    make -j"${BUILD_JOBS}"
+    make install
+  )
+}
+
+install_asterisk() {
+  if [ -f /usr/sbin/asterisk ]; then
+    log "asterisk already installed"
+    return
+  fi
+
+  log "building and installing Asterisk"
+  (
+    cd "${ASTERISK_SOURCE_LINK}"
+    contrib/scripts/get_mp3_source.sh
+    ./configure
+    make -j"${BUILD_JOBS}"
+    make samples
+    make config
+    make install
+  )
+}
+
+ensure_asterisk_group() {
+  if getent group asterisk >/dev/null 2>&1; then
+    log "group asterisk already exists"
+    return
+  fi
+
+  log "creating group asterisk"
+  addgroup asterisk
+}
+
+ensure_asterisk_user() {
+  if id asterisk >/dev/null 2>&1; then
+    log "user asterisk already exists"
+    return
+  fi
+
+  log "creating user asterisk"
+  useradd asterisk -d /var/lib/asterisk -g asterisk -s /usr/sbin/nologin -M
+}
+
+main() {
+  require_root
+  install_packages
+  configure_limits
+  configure_fail2ban
+  configure_timezone
+  download_asterisk_source
+  build_pjproject
+  build_sngrep
+  install_asterisk
+  ensure_asterisk_group
+  ensure_asterisk_user
+}
+
+main "$@"
