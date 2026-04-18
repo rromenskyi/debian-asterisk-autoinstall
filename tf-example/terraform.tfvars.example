@@ -1,0 +1,14 @@
+aws_region         = "eu-central-1"
+availability_zone  = "eu-central-1a"
+project_name       = "debian-asterisk"
+instance_type      = "t3.small"
+key_name           = "my-existing-aws-keypair"
+allowed_ssh_cidrs  = ["203.0.113.10/32"]
+allowed_sip_cidrs  = ["0.0.0.0/0"]
+allowed_rtp_cidrs  = ["0.0.0.0/0"]
+root_volume_size_gb = 32
+asterisk_timezone  = "UTC"
+
+# Instead of key_name you can provide public key material and let Terraform
+# create an EC2 key pair for this stack:
+# ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."

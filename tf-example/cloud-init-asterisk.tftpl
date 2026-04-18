@@ -1,0 +1,32 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee /var/log/asterisk-bootstrap.log | logger -t asterisk-bootstrap) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+export ASTERISK_TIMEZONE="${timezone}"
+
+BOOTSTRAP_DIR="${bootstrap_dir}"
+mkdir -p "$${BOOTSTRAP_DIR}"
+
+cat > "$${BOOTSTRAP_DIR}/install.sh" <<'INSTALL_SH'
+${install_sh}
+INSTALL_SH
+
+cat > "$${BOOTSTRAP_DIR}/post-install.sh" <<'POST_INSTALL_SH'
+${post_install_sh}
+POST_INSTALL_SH
+
+cat > "$${BOOTSTRAP_DIR}/cdr.sql" <<'CDR_SQL'
+${cdr_sql}
+CDR_SQL
+
+chmod 755 "$${BOOTSTRAP_DIR}/install.sh" "$${BOOTSTRAP_DIR}/post-install.sh"
+
+cd "$${BOOTSTRAP_DIR}"
+./install.sh
+./post-install.sh
+
+systemctl enable mariadb || true
+systemctl enable asterisk || true
+systemctl restart asterisk || true

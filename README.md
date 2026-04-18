@@ -23,7 +23,7 @@ fully hardened distribution package.
 | `newuser.sh` | Example helper for creating a sudo-enabled user with an SSH public key. |
 | `cdr.sql` | SQL schema imported by `post-install.sh` for `asteriskcdrdb`. |
 | `dockerfiles/` | Standalone Dockerfiles plus a compose stack with Asterisk, MariaDB, Kamailio, RTPengine, and PHP-FPM. |
-| `tf-example/` | Small Terraform example that provisions demo EC2 instances and security groups. |
+| `tf-example/` | Terraform example that provisions a Debian 12 EC2 VM and bootstraps this repository's Asterisk install on first boot. |
 | `agi-bin/` | AGI and helper scripts used by the telephony stack. |
 
 ## Quick Start
@@ -59,8 +59,9 @@ Detailed walkthroughs:
   third-party host. Review that step before using it in production.
 - The compose stack uses `network_mode: host` and example credentials. Treat it
   as a lab or baseline environment until you harden it.
-- `tf-example/` is a reference only. It opens SSH, HTTP, and ICMP broadly and
-  is not production-ready as-is.
+- `tf-example/` is now wired to a Debian 12 EC2 host and the repository's
+  install scripts, but the default network rules are still intentionally broad
+  enough for first boot and should be tightened before production use.
 
 ## Suggested Execution Order
 
@@ -78,7 +79,7 @@ Detailed walkthroughs:
 .
 ├── agi-bin/              AGI and helper scripts
 ├── dockerfiles/          Container images and compose examples
-├── tf-example/           Terraform example for AWS
+├── tf-example/           Terraform example for a Debian 12 Asterisk VM on AWS
 ├── backup.sh             Backup timer installer
 ├── cdr.sql               CDR schema
 ├── install.sh            Base host installer
