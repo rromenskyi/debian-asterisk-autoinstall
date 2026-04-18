@@ -100,6 +100,12 @@ variable "asterisk_timezone" {
   default     = "UTC"
 }
 
+variable "offline_plan_mode" {
+  description = "Set true only for speculative CI plans that should not call live AWS APIs."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Additional AWS tags to apply to created resources."
   type        = map(string)

@@ -39,6 +39,11 @@ terraform plan
 terraform apply
 ```
 
+The GitHub Actions workflow also runs a speculative `terraform plan` in an
+offline CI mode. That path sets `offline_plan_mode=true` together with a dummy
+AMI ID and key name so the resource graph stays checkable without live AWS
+credentials.
+
 ## After Apply
 
 Debian EC2 images use the SSH user `admin`.
