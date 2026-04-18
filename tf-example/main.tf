@@ -1,5 +1,11 @@
 provider "aws" {
   region = var.aws_region
+
+  # CI can use this mode for speculative plans without live AWS credentials.
+  skip_credentials_validation = var.offline_plan_mode
+  skip_metadata_api_check     = var.offline_plan_mode
+  skip_region_validation      = var.offline_plan_mode
+  skip_requesting_account_id  = var.offline_plan_mode
 }
 
 locals {
