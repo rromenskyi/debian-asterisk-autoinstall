@@ -2,7 +2,7 @@
 
 sudo apt-get -y install tar gzip
 
-tee -a /etc/mydumpconfig.conf << END
+tee /etc/asterisk-backup.conf << END
 BACKUP_PATH=/opt/backup
 END
 
@@ -10,7 +10,7 @@ tee /usr/local/bin/backup_script.sh << END
 #!/bin/bash
 
 # Загрузка конфигурации
-source /etc/mydumpconfig.conf
+source /etc/asterisk-backup.conf
 
 # Создание папки для дампов, если она еще не существует
 mkdir -p \$BACKUP_PATH

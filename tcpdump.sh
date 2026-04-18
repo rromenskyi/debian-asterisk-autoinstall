@@ -2,7 +2,7 @@
 
 sudo apt-get -y install tcpdump
 
-tee /etc/mydumpconfig.conf << END
+tee /etc/asterisk-tcpdump.conf << END
 DUMP_PATH=/opt/dump
 END
 
@@ -10,7 +10,7 @@ tee /usr/local/bin/tcpdump_script.sh << END
 #!/bin/bash
 
 # Загрузка конфигурации
-source /etc/mydumpconfig.conf
+source /etc/asterisk-tcpdump.conf
 
 # Создание папки для дампов, если она еще не существует
 mkdir -p \$DUMP_PATH

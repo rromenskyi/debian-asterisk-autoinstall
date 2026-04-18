@@ -11,9 +11,23 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
+if [[ "$USERNAME" == "username" || "$SSH_PUBLIC_KEY" == "ssh-rsa " ]]; then
+   echo "Edit USERNAME and SSH_PUBLIC_KEY before running this script"
+   exit 1
+fi
+
+if [[ -n "$GROUPNAME" ]] && ! getent group "$GROUPNAME" >/dev/null; then
+   echo "Creating group: $GROUPNAME"
+   groupadd "$GROUPNAME"
+fi
+
 # Create a new user
 echo "Creating new user: $USERNAME"
-adduser --disabled-password --gecos "" $USERNAME
+if [[ -n "$GROUPNAME" ]]; then
+   adduser --disabled-password --gecos "" --ingroup "$GROUPNAME" "$USERNAME"
+else
+   adduser --disabled-password --gecos "" "$USERNAME"
+fi
 
 # Add user to sudo group
 usermod -a -G sudo $USERNAME
