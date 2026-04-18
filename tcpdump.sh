@@ -1,60 +1,71 @@
 #!/bin/bash
 
-sudo apt-get -y install tcpdump
+set -euo pipefail
 
-tee /etc/asterisk-tcpdump.conf << END
-DUMP_PATH=/opt/dump
-END
+DUMP_PATH="${DUMP_PATH:-/opt/dump}"
+CAPTURE_DURATION="${CAPTURE_DURATION:-86400}"
+RETENTION_DAYS="${RETENTION_DAYS:-7}"
+TCPDUMP_FILTER="${TCPDUMP_FILTER:-port 5060}"
 
-tee /usr/local/bin/tcpdump_script.sh << END
+log() {
+  printf '%s\n' "$*"
+}
+
+require_root() {
+  if [[ ${EUID} -ne 0 ]]; then
+    log "run this script as root or via sudo"
+    exit 1
+  fi
+}
+
+write_config() {
+  cat > /etc/asterisk-tcpdump.conf <<EOF
+DUMP_PATH="${DUMP_PATH}"
+CAPTURE_DURATION="${CAPTURE_DURATION}"
+RETENTION_DAYS="${RETENTION_DAYS}"
+TCPDUMP_FILTER="${TCPDUMP_FILTER}"
+EOF
+}
+
+write_capture_script() {
+  cat > /usr/local/bin/tcpdump_script.sh <<'EOF'
 #!/bin/bash
 
-# Загрузка конфигурации
+set -euo pipefail
+
 source /etc/asterisk-tcpdump.conf
 
-# Создание папки для дампов, если она еще не существует
-mkdir -p \$DUMP_PATH
+mkdir -p "${DUMP_PATH}"
 
-# Формирование имени файла: путь/дата-время.pcap
-DUMP_FILE="\$DUMP_PATH/\$(date +%F-%H-%M-%S).pcap"
+timestamp="$(date +%F-%H-%M-%S)"
+dump_file="${DUMP_PATH}/${timestamp}.pcap"
 
-# Поиск и завершение уже запущенных процессов tcpdump
-# pgrep возвращает список ID процессов, которые соответствуют шаблону поиска
-for pid in \$(pgrep -f "tcpdump -s0 -n -w"); do
-    if [ ! -z "\$pid" ]; then
-        echo "Уже запущен tcpdump с PID \$pid, завершаем..."
-        kill \$pid
-        # Дайте немного времени для корректного завершения процесса
-        sleep 5
-    fi
-done
+set +e
+timeout "${CAPTURE_DURATION}" tcpdump -s0 -n -w "${dump_file}" ${TCPDUMP_FILTER}
+status=$?
+set -e
 
-# Запуск tcpdump
-tcpdump -s0 -n -w \$DUMP_FILE port 5060
+if [[ ${status} -ne 0 && ${status} -ne 124 ]]; then
+  exit "${status}"
+fi
 
-# Ротация: Удаление старых дампов, например, старше 7 дней
-find \$DUMP_PATH -type f -name '*.pcap' -mtime +7 -delete
+find "${DUMP_PATH}" -type f -name '*.pcap' -mtime +"${RETENTION_DAYS}" -delete
+EOF
 
-END
+  chmod 755 /usr/local/bin/tcpdump_script.sh
+}
 
-sudo chmod 755 /usr/local/bin/tcpdump_script.sh
-
-
-
-tee /etc/systemd/system/tcpdump.service << END
+write_systemd_units() {
+  cat > /etc/systemd/system/tcpdump.service <<'EOF'
 [Unit]
-Description=Daily tcpdump service
+Description=Scheduled SIP tcpdump capture
 
 [Service]
-#Type=oneshot
-Type=simple
+Type=oneshot
 ExecStart=/usr/local/bin/tcpdump_script.sh
+EOF
 
-[Install]
-WantedBy=multi-user.target
-END
-
-tee /etc/systemd/system/tcpdump.timer << END
+  cat > /etc/systemd/system/tcpdump.timer <<'EOF'
 [Unit]
 Description=Runs tcpdump daily
 
@@ -64,8 +75,18 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target
-END
+EOF
+}
 
-sudo systemctl daemon-reload
-sudo systemctl enable tcpdump.timer
-sudo systemctl start tcpdump.timer
+main() {
+  require_root
+  apt-get -y install tcpdump
+  write_config
+  write_capture_script
+  write_systemd_units
+  systemctl daemon-reload
+  systemctl enable tcpdump.timer
+  systemctl start tcpdump.timer
+}
+
+main "$@"

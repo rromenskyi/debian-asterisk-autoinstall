@@ -1,43 +1,86 @@
 #!/bin/bash
-#asterisk 18-cert postinstall script on debian 12
+
+set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+ASTERISK_DB_PASSWORD_FILE="/usr/src/.asterisk-mysql-pass"
+ASTERISK_CDR_DB_PASSWORD_FILE="/usr/src/.asteriskcdr-mysql-pass"
 
-if [ -f /usr/src/.asterisk-mysql-pass ]; then
- echo "already done"
- exit 1
-fi
+log() {
+  printf '%s\n' "$*"
+}
 
-systemctl restart mariadb
+require_root() {
+  if [[ ${EUID} -ne 0 ]]; then
+    log "run this script as root or via sudo"
+    exit 1
+  fi
+}
 
-mkdir -p /etc/asterisk/sip_config
-mkdir -p /etc/asterisk/dialplan
-mkdir -p /var/run/asterisk
-mkdir -p /var/log/asterisk
-mkdir -p /usr/lib/asterisk/modules
+already_configured() {
+  [[ -f "${ASTERISK_DB_PASSWORD_FILE}" && -f "${ASTERISK_CDR_DB_PASSWORD_FILE}" ]]
+}
 
-ASTPASS=`pwgen -s 14 1`
-ASTPASSCDR=`pwgen -s 14 1`
+mysql_root() {
+  mysql -u root "$@"
+}
 
-echo "CREATE USER 'asterisk'@'%' IDENTIFIED BY '$ASTPASS';" | mysql -u root
-echo "CREATE USER 'asterisk'@'localhost' IDENTIFIED BY '$ASTPASS';" | mysql -u root
-echo "CREATE DATABASE asterisk;" | mysql -u root
-echo "GRANT ALL PRIVILEGES ON asterisk.* TO 'asterisk'@'%';" | mysql -u root
-echo "GRANT ALL PRIVILEGES ON asterisk.* TO 'asterisk'@'localhost';" | mysql -u root
-echo "$ASTPASS" > /usr/src/.asterisk-mysql-pass
-chmod 600 /usr/src/.asterisk-mysql-pass
+write_secret_file() {
+  local target_file="$1"
+  local secret="$2"
 
-echo "CREATE USER 'asteriskcdr'@'%' IDENTIFIED BY '$ASTPASSCDR';" | mysql -u root
-echo "CREATE USER 'asteriskcdr'@'localhost' IDENTIFIED BY '$ASTPASSCDR';" | mysql -u root
-echo "CREATE DATABASE asteriskcdrdb;" | mysql -u root
-echo "GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asteriskcdr'@'%';" | mysql -u root
-echo "GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asteriskcdr'@'localhost';" | mysql -u root
-echo "$ASTPASSCDR" > /usr/src/.asteriskcdr-mysql-pass
-chmod 600 /usr/src/.asteriskcdr-mysql-pass
+  printf '%s\n' "${secret}" > "${target_file}"
+  chmod 600 "${target_file}"
+}
 
-mysql -uasteriskcdr -p"$ASTPASSCDR" asteriskcdrdb < "${SCRIPT_DIR}/cdr.sql"
+prepare_directories() {
+  install -d \
+    /etc/asterisk \
+    /etc/asterisk/dialplan \
+    /etc/asterisk/sip_config \
+    /usr/lib/asterisk/modules \
+    /var/lib/asterisk \
+    /var/log/asterisk \
+    /var/run/asterisk \
+    /var/spool/asterisk
+}
 
-tee -a /etc/odbc.ini << END
+configure_databases() {
+  local astpass="$1"
+  local astpasscdr="$2"
+
+  systemctl restart mariadb
+
+  mysql_root <<SQL
+CREATE DATABASE IF NOT EXISTS asterisk;
+CREATE USER IF NOT EXISTS 'asterisk'@'%' IDENTIFIED BY '${astpass}';
+CREATE USER IF NOT EXISTS 'asterisk'@'localhost' IDENTIFIED BY '${astpass}';
+GRANT ALL PRIVILEGES ON asterisk.* TO 'asterisk'@'%';
+GRANT ALL PRIVILEGES ON asterisk.* TO 'asterisk'@'localhost';
+
+CREATE DATABASE IF NOT EXISTS asteriskcdrdb;
+CREATE USER IF NOT EXISTS 'asteriskcdr'@'%' IDENTIFIED BY '${astpasscdr}';
+CREATE USER IF NOT EXISTS 'asteriskcdr'@'localhost' IDENTIFIED BY '${astpasscdr}';
+GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asteriskcdr'@'%';
+GRANT ALL PRIVILEGES ON asteriskcdrdb.* TO 'asteriskcdr'@'localhost';
+FLUSH PRIVILEGES;
+SQL
+
+  write_secret_file "${ASTERISK_DB_PASSWORD_FILE}" "${astpass}"
+  write_secret_file "${ASTERISK_CDR_DB_PASSWORD_FILE}" "${astpasscdr}"
+  mysql -u asteriskcdr -p"${astpasscdr}" asteriskcdrdb < "${SCRIPT_DIR}/cdr.sql"
+}
+
+configure_odbc() {
+  if grep -q '^\[asterisk-cdr-connector\]$' /etc/odbc.ini 2>/dev/null; then
+    return
+  fi
+
+  if [[ -s /etc/odbc.ini ]]; then
+    printf '\n' >> /etc/odbc.ini
+  fi
+
+  cat >> /etc/odbc.ini <<'EOF'
 [asterisk-cdr-connector]
 Description = MySQL connection to 'asteriskcdrdb' database
 Driver = MariaDB Unicode
@@ -45,33 +88,31 @@ Database = asteriskcdrdb
 Server = localhost
 Port = 3306
 Socket = /var/run/mysqld/mysqld.sock
-END
+EOF
+}
 
+set_ownership() {
+  local path
 
-#tee -a /etc/default/asterisk << END
-#AST_USER="asterisk"
-#AST_GROUP="asterisk"
-#END
+  for path in \
+    /etc/asterisk \
+    /usr/lib/asterisk \
+    /var/lib/asterisk \
+    /var/spool/asterisk \
+    /var/run/asterisk \
+    /var/log/asterisk; do
+    chown -R asterisk:asterisk "${path}"
+  done
 
-#tee -a /etc/sysconfig/asterisk << END
-#AST_USER="asterisk"
-#AST_GROUP="asterisk"
-#END
+  if [[ -e /usr/sbin/asterisk ]]; then
+    chown asterisk:asterisk /usr/sbin/asterisk
+  fi
+}
 
-#groupadd asterisk
-#useradd -d /var/lib/asterisk -g asterisk asterisk
-
-chown -R asterisk:asterisk /etc/asterisk/
-chown -R asterisk:asterisk /usr/lib/asterisk/
-chown -R asterisk:asterisk /var/lib/asterisk/
-chown -R asterisk:asterisk /var/spool/asterisk/
-chown -R asterisk:asterisk /var/run/asterisk/
-chown -R asterisk:asterisk /var/log/asterisk/
-chown asterisk:asterisk /usr/sbin/asterisk
-
-tee /etc/systemd/system/asterisk.service << END
+write_service_unit() {
+  cat > /etc/systemd/system/asterisk.service <<'EOF'
 [Unit]
-Description=Asterisk PBX and telephony daemon.
+Description=Asterisk PBX and telephony daemon
 After=network.target
 
 [Service]
@@ -86,12 +127,14 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-END
+EOF
 
-systemctl daemon-reload
-systemctl enable asterisk
+  systemctl daemon-reload
+  systemctl enable asterisk
+}
 
-tee -a /etc/logrotate.d/asterisk << END
+write_logrotate_config() {
+  cat > /etc/logrotate.d/asterisk <<'EOF'
 /var/log/asterisk/queue_log {
         daily
         rotate 7
@@ -120,39 +163,78 @@ tee -a /etc/logrotate.d/asterisk << END
                 /usr/sbin/asterisk -rx 'logger reload' > /dev/null 2> /dev/null
         endscript
 }
-END
+EOF
+}
 
-tee -a /etc/asterisk/modules.conf << END
+append_modules_block() {
+  if grep -q 'app_voicemail_imap.so' /etc/asterisk/modules.conf 2>/dev/null; then
+    return
+  fi
+
+  if [[ -s /etc/asterisk/modules.conf ]]; then
+    printf '\n' >> /etc/asterisk/modules.conf
+  fi
+
+  cat >> /etc/asterisk/modules.conf <<'EOF'
 noload = app_voicemail_imap.so
 noload = app_voicemail_odbc.so
-noload=chan_iax2.so
-noload=chan_alsa.so
-noload=chan_audiosocket.so
-noload=chan_console.so
-noload=chan_mgcp.so
-noload=chan_skinny.so
-noload=chan_unistim.so
-noload=chan_oss.so
-noload=cel_pgsql.so
-noload=cel_radius.so
-noload=cel_sqlite3_custom.so
-noload=cel_tds.so
-noload=cdr_odbc.so
-noload=cdr_pgsql.so
-noload=cdr_radius.so
-noload=cdr_sqlite3_custom.so
-noload=cdr_tds.so
-noload=pbx_dundi.so
-noload=pbx_lua.so
-END
+noload = chan_iax2.so
+noload = chan_alsa.so
+noload = chan_audiosocket.so
+noload = chan_console.so
+noload = chan_mgcp.so
+noload = chan_skinny.so
+noload = chan_unistim.so
+noload = chan_oss.so
+noload = cel_pgsql.so
+noload = cel_radius.so
+noload = cel_sqlite3_custom.so
+noload = cel_tds.so
+noload = cdr_odbc.so
+noload = cdr_pgsql.so
+noload = cdr_radius.so
+noload = cdr_sqlite3_custom.so
+noload = cdr_tds.so
+noload = pbx_dundi.so
+noload = pbx_lua.so
+EOF
+}
 
+install_optional_codecs() {
+  cd /usr/lib/asterisk/modules
 
-cd /usr/lib/asterisk/modules
-if wget -O codec_g729.so http://asterisk.hosting.lv/bin/codec_g729-ast180-gcc4-glibc-x86_64-core2-sse4.so && \
-   wget -O codec_g723.so http://asterisk.hosting.lv/bin/codec_g723-ast180-gcc4-glibc-x86_64-core2-sse4.so; then
-chmod 755 codec_g7*.so
-else
-echo "optional codec download failed; continuing without third-party codecs"
-fi
+  if wget -O codec_g729.so http://asterisk.hosting.lv/bin/codec_g729-ast180-gcc4-glibc-x86_64-core2-sse4.so && \
+     wget -O codec_g723.so http://asterisk.hosting.lv/bin/codec_g723-ast180-gcc4-glibc-x86_64-core2-sse4.so; then
+    chmod 755 codec_g7*.so
+    return
+  fi
 
+  log "optional codec download failed; continuing without third-party codecs"
+}
 
+main() {
+  local astpass
+  local astpasscdr
+
+  require_root
+
+  if already_configured; then
+    log "post-install already completed"
+    exit 0
+  fi
+
+  prepare_directories
+
+  astpass="$(pwgen -s 14 1)"
+  astpasscdr="$(pwgen -s 14 1)"
+
+  configure_databases "${astpass}" "${astpasscdr}"
+  configure_odbc
+  set_ownership
+  write_service_unit
+  write_logrotate_config
+  append_modules_block
+  install_optional_codecs
+}
+
+main "$@"

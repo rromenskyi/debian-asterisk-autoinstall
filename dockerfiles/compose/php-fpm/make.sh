@@ -1,3 +1,10 @@
 #!/bin/bash
-docker build -t roman220/php-fpm . &&
-docker push roman220/php-fpm
+
+set -euo pipefail
+
+IMAGE_NAME="${IMAGE_NAME:-roman220/php-fpm}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+cd "${SCRIPT_DIR}"
+docker build -t "${IMAGE_NAME}" .
+docker push "${IMAGE_NAME}"
