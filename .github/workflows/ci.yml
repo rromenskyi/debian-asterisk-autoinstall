@@ -1,0 +1,45 @@
+name: Repository Checks
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate shell script syntax
+        run: |
+          set -eu
+          find . -type f -name '*.sh' | while read -r file; do
+            shebang=$(head -n 1 "$file" || true)
+            case "$shebang" in
+              '#!/bin/sh'|'#!/usr/bin/env sh')
+                echo "sh -n $file"
+                sh -n "$file"
+                ;;
+              *)
+                echo "bash -n $file"
+                bash -n "$file"
+                ;;
+            esac
+          done
+
+  terraform-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive tf-example
