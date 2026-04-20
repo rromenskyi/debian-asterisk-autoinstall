@@ -20,6 +20,7 @@ fully hardened distribution package.
 | `post-install.sh` | Creates MariaDB users/databases, imports the bundled CDR schema, sets ownership, and writes service/logrotate config. |
 | `backup.sh` | Installs a systemd timer for daily Asterisk config/data/CDR backups. |
 | `tcpdump.sh` | Installs a systemd timer for SIP packet captures. |
+| `cdr-archive.sh` | Installs a systemd timer that archives the previous month's CDR files into a 7z archive. |
 | `newuser.sh` | Example helper for creating a sudo-enabled user with an SSH public key. |
 | `cdr.sql` | SQL schema imported by `post-install.sh` for `asteriskcdrdb`. |
 | `dockerfiles/` | Standalone Dockerfiles plus a compose stack with Asterisk, MariaDB, Kamailio, RTPengine, and PHP-FPM. |
@@ -44,6 +45,7 @@ After the base install you can optionally enable:
 ```bash
 sudo ./backup.sh
 sudo ./tcpdump.sh
+sudo ./cdr-archive.sh
 ```
 
 Detailed walkthroughs:
@@ -81,6 +83,7 @@ Detailed walkthroughs:
 ├── dockerfiles/          Container images and compose examples
 ├── tf-example/           Terraform example for a Debian 12 Asterisk VM on AWS
 ├── backup.sh             Backup timer installer
+├── cdr-archive.sh        CDR monthly archive timer installer
 ├── cdr.sql               CDR schema
 ├── install.sh            Base host installer
 ├── newuser.sh            User bootstrap helper

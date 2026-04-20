@@ -55,7 +55,8 @@ install_packages() {
     mariadb-server \
     pwgen \
     libmariadb-dev \
-    unixodbc-dev
+    unixodbc-dev \
+    p7zip-full
 }
 
 configure_limits() {

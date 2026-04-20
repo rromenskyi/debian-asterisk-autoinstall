@@ -43,6 +43,27 @@ This installs:
 The generated capture job writes SIP captures for port `5060` into
 `/opt/dump` and removes captures older than 7 days.
 
+## CDR Archive
+
+Run:
+
+```bash
+sudo ./cdr-archive.sh
+```
+
+This installs:
+
+- `/etc/asterisk-cdr-archive.conf`
+- `/usr/local/bin/cdr_archive_script.sh`
+- `cdr-archive.service`
+- `cdr-archive.timer`
+
+The generated job fires on the 2nd of each month, gathers CDR files from
+`/var/cdrs` that match the previous month's `YYYYMM*` prefix, concatenates
+them into a single `YYYYMM.cdr`, compresses it to `/var/cdr-arch/YYYYMM.cdr.7z`,
+verifies the archive, and then removes the original CDR files. Archives older
+than 365 days are pruned.
+
 ## User Bootstrap
 
 [`newuser.sh`](../newuser.sh) is an example helper that creates a local user,
